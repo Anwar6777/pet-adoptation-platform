@@ -62,3 +62,34 @@ export const login = async (request, response, next) => {
 export const getCurrentUser = async (request, response) => {
   response.status(200).json({ user: publicUser(request.user) });
 };
+
+export const changePassword = async (request, response, next) => {
+  try {
+    const { currentPassword, newPassword } = request.body;
+
+    if (!currentPassword || !newPassword) {
+      return response.status(400).json({ message: 'Current and new password are required.' });
+    }
+    if (newPassword.length < 6) {
+      return response.status(400).json({ message: 'New password must contain at least 6 characters.' });
+    }
+
+    const user = await User.findById(request.user._id).select('+password');
+    const passwordMatches = await bcrypt.compare(currentPassword, user.password);
+    if (!passwordMatches) {
+      return response.status(401).json({ message: 'Your current password is incorrect.' });
+    }
+
+    const samePassword = await bcrypt.compare(newPassword, user.password);
+    if (samePassword) {
+      return response.status(400).json({ message: 'New password must be different from your current password.' });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    return response.status(200).json({ message: 'Password updated successfully.' });
+  } catch (error) {
+    return next(error);
+  }
+};
