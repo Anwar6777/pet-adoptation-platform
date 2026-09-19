@@ -51,3 +51,17 @@ export const updateUser = async (request, response, next) => {
     return next(error);
   }
 };
+
+export const deleteUser = async (request, response, next) => {
+  try {
+    if (request.user._id.toString() === request.params.id) {
+      return response.status(400).json({ message: 'You cannot delete your own account while logged in as it.' });
+    }
+
+    const user = await User.findByIdAndDelete(request.params.id);
+    if (!user) return response.status(404).json({ message: 'User not found.' });
+    return response.status(204).send();
+  } catch (error) {
+    return next(error);
+  }
+};
