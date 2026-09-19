@@ -18,6 +18,13 @@ function Navbar() {
   const closeMenu = () => setMenuOpen(false);
   const navClass = ({ isActive }) => `text-sm font-semibold transition ${isActive ? 'text-teal' : 'text-slate-600 hover:text-teal'}`;
 
+  const accountLinks = user
+    ? [
+        { label: user.role === 'admin' ? 'Admin Dashboard' : 'Dashboard', to: user.role === 'admin' ? '/admin' : '/dashboard' },
+        ...(user.role !== 'admin' ? [{ label: 'My Requests', to: '/my-requests' }, { label: 'Profile', to: '/profile' }] : []),
+      ]
+    : [];
+
   return (
     <header className="sticky top-0 z-40 border-b border-orange-100/80 bg-cream/95 backdrop-blur">
       <nav className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-10" aria-label="Main navigation">
@@ -33,8 +40,9 @@ function Navbar() {
         <div className="hidden items-center gap-3 lg:flex">
           {user ? (
             <>
-              <Link className="text-sm font-semibold text-slate-600 hover:text-teal" to={user.role === 'admin' ? '/admin' : '/dashboard'}>{user.role === 'admin' ? 'Admin Dashboard' : 'Dashboard'}</Link>
-              {user.role !== 'admin' && <><Link className="text-sm font-semibold text-slate-600 hover:text-teal" to="/my-requests">My Requests</Link><Link className="text-sm font-semibold text-slate-600 hover:text-teal" to="/profile">Profile</Link></>}
+              {accountLinks.map((link) => (
+                <Link key={link.to} className="text-sm font-semibold text-slate-600 hover:text-teal" to={link.to}>{link.label}</Link>
+              ))}
               <button onClick={logout} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 hover:bg-white hover:text-teal"><LogOut size={16} /> Logout</button>
             </>
           ) : (
@@ -54,8 +62,23 @@ function Navbar() {
         <div className="border-t border-orange-100 bg-cream px-5 py-5 shadow-lg lg:hidden">
           <div className="mx-auto flex max-w-7xl flex-col gap-4">
             {publicLinks.map((link) => <NavLink key={link.to} onClick={closeMenu} className={navClass} to={link.to}>{link.label}</NavLink>)}
+            {user && (
+              <>
+                <hr className="border-orange-100" />
+                {accountLinks.map((link) => (
+                  <NavLink key={link.to} onClick={closeMenu} className={navClass} to={link.to}>{link.label}</NavLink>
+                ))}
+              </>
+            )}
             <hr className="border-orange-100" />
-            {user ? <button onClick={() => { logout(); closeMenu(); }} className="w-fit text-sm font-bold text-teal">Logout</button> : <div className="flex gap-3"><Link onClick={closeMenu} className="rounded-xl border border-teal px-4 py-2 text-sm font-bold text-teal" to="/login">Login</Link><Link onClick={closeMenu} className="rounded-xl bg-teal px-4 py-2 text-sm font-bold text-white" to="/register">Register</Link></div>}
+            {user ? (
+              <button onClick={() => { logout(); closeMenu(); }} className="inline-flex w-fit items-center gap-2 text-sm font-bold text-teal"><LogOut size={16} /> Logout</button>
+            ) : (
+              <div className="flex gap-3">
+                <Link onClick={closeMenu} className="rounded-xl border border-teal px-4 py-2 text-sm font-bold text-teal" to="/login">Login</Link>
+                <Link onClick={closeMenu} className="rounded-xl bg-teal px-4 py-2 text-sm font-bold text-white" to="/register">Register</Link>
+              </div>
+            )}
           </div>
         </div>
       )}
