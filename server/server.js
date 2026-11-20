@@ -1,5 +1,3 @@
-import dns from 'node:dns';
-dns.setServers(['8.8.8.8', '1.1.1.1']);
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
@@ -14,7 +12,7 @@ import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = Number(process.env.PORT) || 5000;
 
 app.use(
   cors({
@@ -24,7 +22,10 @@ app.use(
 app.use(express.json({ limit: '10kb' }));
 
 app.get('/api/health', (_request, response) => {
-  response.status(200).json({ message: 'PawConnect API is running.' });
+  response.status(200).json({
+    message: 'PawConnect API is running.',
+    database: 'connected',
+  });
 });
 
 app.use('/api/auth', authRoutes);
@@ -36,10 +37,22 @@ app.use('/api/admin', adminRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-if (process.env.MONGODB_URI) {
-  connectDatabase().then(() => {
-    app.listen(port, () => console.log(`PawConnect API listening on port ${port}`));
+const startServer = async () => {
+  if (!process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI is missing. Add it to server/.env before starting the API.');
+  }
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET is missing. Add a strong random secret to server/.env before starting the API.');
+  }
+
+  await connectDatabase();
+
+  app.listen(port, () => {
+    console.log(`PawConnect API listening on port ${port}`);
   });
-} else {
-  app.listen(port, () => console.log(`PawConnect API listening on port ${port} (database not configured)`));
-}
+};
+
+startServer().catch((error) => {
+  console.error(`PawConnect could not start: ${error.message}`);
+  process.exit(1);
+});

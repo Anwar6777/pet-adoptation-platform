@@ -16,24 +16,59 @@ const applicationPayload = (body, userId, petId) => ({
 });
 
 export const createAdoptionRequest = async (request, response, next) => {
+  let reservedPetId;
   try {
     const { petId } = request.body;
     if (!petId) return response.status(400).json({ message: 'Please choose a pet to adopt.' });
 
-    const pet = await Pet.findById(petId);
-    if (!pet) return response.status(404).json({ message: 'Pet not found.' });
-    if (pet.status === 'Adopted') return response.status(400).json({ message: 'This pet has already been adopted.' });
-    if (pet.status === 'Pending') return response.status(400).json({ message: 'An adoption request for this pet is already under review.' });
+    const existingRequest = await AdoptionRequest.findOne({
+      user: request.user._id,
+      pet: petId,
+      status: 'Pending',
+    });
+    if (existingRequest) {
+      return response.status(409).json({ message: 'You have already submitted an application for this pet.' });
+    }
 
-    const existingRequest = await AdoptionRequest.findOne({ user: request.user._id, pet: petId, status: 'Pending' });
-    if (existingRequest) return response.status(400).json({ message: 'You have already submitted an application for this pet.' });
+    // Atomically reserve only an Available pet. A read-then-save check allows
+    // two simultaneous applicants to reserve the same pet.
+    const pet = await Pet.findOneAndUpdate(
+      { _id: petId, status: 'Available' },
+      { $set: { status: 'Pending' } },
+      { new: true, runValidators: true },
+    );
 
-    const adoption = await AdoptionRequest.create(applicationPayload(request.body, request.user._id, petId));
-    pet.status = 'Pending';
-    await pet.save();
+    if (!pet) {
+      const exists = await Pet.exists({ _id: petId });
+      return response.status(exists ? 409 : 404).json({
+        message: exists
+          ? 'This pet is no longer available for applications.'
+          : 'Pet not found.',
+      });
+    }
+    reservedPetId = pet._id;
 
-    return response.status(201).json({ message: 'Your adoption request has been submitted successfully.', adoption, pet });
+    const adoption = await AdoptionRequest.create(
+      applicationPayload(request.body, request.user._id, petId),
+    );
+
+    return response.status(201).json({
+      message: 'Your adoption request has been submitted successfully.',
+      adoption,
+      pet,
+    });
   } catch (error) {
+    // If validation or persistence fails after reservation, release the pet.
+    if (reservedPetId) {
+      try {
+        await Pet.findOneAndUpdate(
+          { _id: reservedPetId, status: 'Pending' },
+          { $set: { status: 'Available' } },
+        );
+      } catch (rollbackError) {
+        console.error('Failed to release pet after adoption request error:', rollbackError);
+      }
+    }
     return next(error);
   }
 };
@@ -66,16 +101,41 @@ export const updateAdoptionStatus = async (request, response, next) => {
       return response.status(400).json({ message: 'Status must be Approved or Rejected.' });
     }
 
-    const adoption = await AdoptionRequest.findById(request.params.id);
-    if (!adoption) return response.status(404).json({ message: 'Adoption request not found.' });
-    if (adoption.status !== 'Pending') return response.status(400).json({ message: 'This adoption request has already been reviewed.' });
+    const adoption = await AdoptionRequest.findOneAndUpdate(
+      { _id: request.params.id, status: 'Pending' },
+      { $set: { status } },
+      { new: true, runValidators: true },
+    );
+    if (!adoption) {
+      const exists = await AdoptionRequest.exists({ _id: request.params.id });
+      return response.status(exists ? 409 : 404).json({
+        message: exists ? 'This adoption request has already been reviewed.' : 'Adoption request not found.',
+      });
+    }
 
-    adoption.status = status;
-    await adoption.save();
-    await Pet.findByIdAndUpdate(adoption.pet, { status: status === 'Approved' ? 'Adopted' : 'Available' });
+    const petStatus = status === 'Approved' ? 'Adopted' : 'Available';
+    const pet = await Pet.findOneAndUpdate(
+      { _id: adoption.pet, status: 'Pending' },
+      { $set: { status: petStatus } },
+      { new: true },
+    );
 
-    const updatedAdoption = await AdoptionRequest.findById(adoption._id).populate('user', 'name email phone').populate('pet', 'name breed species image location status');
-    return response.status(200).json({ message: `Adoption request ${status.toLowerCase()}.`, adoption: updatedAdoption });
+    if (!pet) {
+      // Restore the request if its pet could not be transitioned.
+      await AdoptionRequest.findOneAndUpdate(
+        { _id: adoption._id, status },
+        { $set: { status: 'Pending' } },
+      );
+      return response.status(409).json({ message: 'The pet status changed. Refresh the request and try again.' });
+    }
+
+    const updatedAdoption = await AdoptionRequest.findById(adoption._id)
+      .populate('user', 'name email phone')
+      .populate('pet', 'name breed species image location status');
+    return response.status(200).json({
+      message: `Adoption request ${status.toLowerCase()}.`,
+      adoption: updatedAdoption,
+    });
   } catch (error) {
     return next(error);
   }
@@ -83,12 +143,28 @@ export const updateAdoptionStatus = async (request, response, next) => {
 
 export const cancelAdoptionRequest = async (request, response, next) => {
   try {
-    const adoption = await AdoptionRequest.findOne({ _id: request.params.id, user: request.user._id });
-    if (!adoption) return response.status(404).json({ message: 'Adoption request not found.' });
-    if (adoption.status !== 'Pending') return response.status(400).json({ message: 'Only pending requests can be cancelled.' });
+    const adoption = await AdoptionRequest.findOneAndDelete({
+      _id: request.params.id,
+      user: request.user._id,
+      status: 'Pending',
+    });
 
-    await Pet.findByIdAndUpdate(adoption.pet, { status: 'Available' });
-    await adoption.deleteOne();
+    if (!adoption) {
+      const exists = await AdoptionRequest.exists({
+        _id: request.params.id,
+        user: request.user._id,
+      });
+      return response.status(exists ? 409 : 404).json({
+        message: exists
+          ? 'Only pending requests can be cancelled.'
+          : 'Adoption request not found.',
+      });
+    }
+
+    await Pet.findOneAndUpdate(
+      { _id: adoption.pet, status: 'Pending' },
+      { $set: { status: 'Available' } },
+    );
     return response.status(204).send();
   } catch (error) {
     return next(error);

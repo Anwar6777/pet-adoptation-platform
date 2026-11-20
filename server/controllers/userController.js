@@ -1,3 +1,4 @@
+import AdoptionRequest from '../models/AdoptionRequest.js';
 import User from '../models/User.js';
 
 const publicUser = (user) => ({
@@ -42,7 +43,7 @@ export const updateUser = async (request, response, next) => {
     ['name', 'email', 'phone', 'address'].forEach((field) => {
       if (request.body[field] !== undefined) updates[field] = request.body[field];
     });
-    if (updates.email) updates.email = updates.email.trim().toLowerCase();
+    if (typeof updates.email === 'string') updates.email = updates.email.trim().toLowerCase();
 
     const user = await User.findByIdAndUpdate(request.params.id, updates, { new: true, runValidators: true });
     if (!user) return response.status(404).json({ message: 'User not found.' });
@@ -56,6 +57,13 @@ export const deleteUser = async (request, response, next) => {
   try {
     if (request.user._id.toString() === request.params.id) {
       return response.status(400).json({ message: 'You cannot delete your own account while logged in as it.' });
+    }
+
+    const hasAdoptionHistory = await AdoptionRequest.exists({ user: request.params.id });
+    if (hasAdoptionHistory) {
+      return response.status(409).json({
+        message: 'This user has adoption history and cannot be deleted. Keep the account record to preserve application history.',
+      });
     }
 
     const user = await User.findByIdAndDelete(request.params.id);
