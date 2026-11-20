@@ -4,7 +4,7 @@ PawConnect is a full-stack MERN pet-adoption platform. Visitors can browse adopt
 
 ## Tech stack
 
-**Client:** React 19, Vite, React Router, Axios, Tailwind CSS, Lucide React, React Toastify
+**Client:** React 19, Vite, React Router, Axios, Tailwind CSS, Lucide React, React Toastify  
 **Server:** Node.js, Express 5, MongoDB (Mongoose), JWT auth, bcryptjs
 
 ## Project structure
@@ -12,26 +12,13 @@ PawConnect is a full-stack MERN pet-adoption platform. Visitors can browse adopt
 ```
 pawconnect/
 ├── client/          # Vite + React frontend
-│   └── src/
-│       ├── pages/
-│       │   ├── public/   # Home, Browse Pets, Pet Details, How It Works, About, Contact, Privacy, Auth
-│       │   ├── user/     # Dashboard, My Requests, Profile
-│       │   └── admin/    # Admin Dashboard
-│       ├── components/   # Navbar, ProtectedRoute, forms, shared UI
-│       ├── context/       # AuthContext
-│       └── services/      # api.js + per-feature API clients
-└── server/          # Express API
-    ├── controllers/
-    ├── models/       # User, Pet, AdoptionRequest
-    ├── routes/
-    ├── middleware/    # auth (protect / adminOnly), error handling
-    └── seed.js        # Demo accounts + 18 sample pets
+└── server/          # Express API, MongoDB models, routes and controllers
 ```
 
 ## Prerequisites
 
 - Node.js 20 or later
-- A MongoDB Atlas cluster (or local MongoDB instance)
+- MongoDB Atlas or a local MongoDB instance
 
 ## Installation
 
@@ -39,34 +26,36 @@ pawconnect/
 npm run install:all
 ```
 
-This installs the root, `client`, and `server` dependencies in one step.
+## Configure the server
 
-## Environment variables
-
-Create a `.env` file in `server/` (see `.env.example` if present) with:
+Copy `server/.env.example` to `server/.env`, then set your MongoDB connection string and a private JWT secret. The API will not start until both `MONGODB_URI` and `JWT_SECRET` are configured and MongoDB is reachable.
 
 | Variable | Purpose |
 | --- | --- |
-| `PORT` | Port the API listens on (defaults to `5000`) |
+| `PORT` | API port (defaults to `5000`) |
 | `MONGODB_URI` | MongoDB Atlas / local connection string |
-| `JWT_SECRET` | Secret used to sign auth tokens |
-| `JWT_EXPIRES_IN` | Token lifetime (e.g. `7d`) |
-| `CLIENT_URL` | Frontend origin, for CORS (e.g. `http://localhost:5173`) |
+| `JWT_SECRET` | Long, random secret used to sign tokens |
+| `JWT_EXPIRES_IN` | Token lifetime (defaults to `7d`) |
+| `CLIENT_URL` | Frontend origin for CORS (defaults to `http://localhost:5173`) |
 
-> If you see a MongoDB connection error mentioning an IP whitelist, add your current IP (or `0.0.0.0/0` for dev only) under **Network Access** in your Atlas project.
+For MongoDB Atlas connection errors mentioning an IP whitelist, add your current IP under Network Access in your Atlas project. Do not use `0.0.0.0/0` in production.
 
 ## Seed demo data
 
-Once `MONGODB_URI` is set, populate demo accounts and 18 sample pets:
+After configuring MongoDB, run:
 
 ```bash
 npm run seed --prefix server
 ```
 
+The seed script is safe to run more than once: it adds missing demo accounts and sample pets without deleting or overwriting existing users, pets, or adoption requests.
+
 | Role | Email | Password |
 | --- | --- | --- |
 | Admin | `admin@pawconnect.demo` | `Demo@123` |
 | User | `user@pawconnect.demo` | `Demo@123` |
+
+Change demo credentials before deploying publicly.
 
 ## Run locally
 
@@ -77,71 +66,30 @@ npm run dev
 - Frontend: `http://localhost:5173`
 - API health check: `http://localhost:5000/api/health`
 
-Or run each side independently: `npm run client` / `npm run server`.
+Or run each side independently with `npm run client` and `npm run server`.
 
-## Frontend routes
+## Main frontend routes
 
 | Path | Access | Page |
 | --- | --- | --- |
-| `/` | Public | Home |
-| `/pets` | Public | Browse Pets |
-| `/pets/:id` | Public | Pet Details |
-| `/how-it-works`, `/about`, `/contact`, `/privacy` | Public | Info pages |
-| `/login`, `/register` | Public | Auth |
-| `/dashboard` | Logged-in user | User dashboard |
-| `/my-requests` | Logged-in user | My adoption requests |
-| `/profile` | Logged-in user | Profile settings |
-| `/admin` | Admin only | Admin dashboard |
-| `*` | — | Falls back to the About page |
+| `/`, `/pets`, `/pets/:id` | Public | Home, browse pets, pet details |
+| `/how-it-works`, `/about`, `/contact`, `/privacy` | Public | Information pages |
+| `/login`, `/register` | Public | Authentication |
+| `/dashboard`, `/my-requests`, `/profile` | Signed-in user | User dashboard, requests and profile |
+| `/admin` | Admin only | Shelter administration |
 
-## API reference
+## API overview
 
-### Auth
+- Auth: `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`
+- Pets: `GET /api/pets`, `GET /api/pets/:id`, admin-only create/update/delete
+- Adoptions: signed-in users submit, view and cancel their requests; admins review requests
+- Users: users manage their own profile; admins manage users
+- Admin: `GET /api/admin/dashboard`
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| POST | `/api/auth/register` | Register a standard user and receive a JWT |
-| POST | `/api/auth/login` | Log in and receive a JWT |
-| GET | `/api/auth/me` | Get the authenticated user's profile |
+All protected API requests use `Authorization: Bearer <token>`.
 
-### Pets
+## Security and configuration notes
 
-| Method | Endpoint | Access | Purpose |
-| --- | --- | --- | --- |
-| GET | `/api/pets` | Public | List pets; supports search and filters |
-| GET | `/api/pets/:id` | Public | Get pet details |
-| POST | `/api/pets` | Admin | Add a pet |
-| PUT | `/api/pets/:id` | Admin | Update a pet |
-| DELETE | `/api/pets/:id` | Admin | Delete a pet |
-
-Example filter request: `/api/pets?search=luna&species=Cat&gender=Female&location=Delhi&status=Available`.
-
-### Adoptions
-
-| Method | Endpoint | Access | Purpose |
-| --- | --- | --- | --- |
-| POST | `/api/adoptions` | User | Submit an adoption application |
-| GET | `/api/adoptions/my` | User | View personal adoption requests |
-| DELETE | `/api/adoptions/:id` | User | Cancel a pending request |
-| GET | `/api/adoptions` | Admin | List all adoption requests |
-| PUT | `/api/adoptions/:id/status` | Admin | Approve or reject a pending request |
-
-### Users
-
-| Method | Endpoint | Access | Purpose |
-| --- | --- | --- | --- |
-| GET | `/api/users/:id` | Owner/Admin | Get a profile |
-| PUT | `/api/users/:id` | Owner/Admin | Update basic profile details |
-| GET | `/api/users` | Admin | List registered users |
-
-### Admin
-
-| Method | Endpoint | Access | Purpose |
-| --- | --- | --- | --- |
-| GET | `/api/admin/dashboard` | Admin | Dashboard statistics and recent requests |
-
-## Notes
-
-- `AdminDashboardPage` (`/admin`) calls `GET /api/admin/dashboard`, protected by the `protect` + `adminOnly` middleware, and surfaces total/available/adopted pets, pending requests, total users, and the 5 most recent adoption requests.
-- `ProtectedRoute` accepts an `adminOnly` prop; non-admins hitting `/admin` are redirected to `/dashboard`, and logged-out users are redirected to `/login`.
-- Never commit `.env` files or real Atlas credentials — `.gitignore` already excludes `.env`, `server/.env`, and `client/.env`.
+- Never commit `.env` files or real database credentials.
+- The API connects to MongoDB before opening its HTTP port, so a broken database configuration fails visibly instead of leaving a half-working server running.
+- The health endpoint is available at `/api/health` after successful database connection.
