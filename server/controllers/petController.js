@@ -1,3 +1,4 @@
+import AdoptionRequest from '../models/AdoptionRequest.js';
 import Pet from '../models/Pet.js';
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -80,6 +81,13 @@ export const updatePet = async (request, response, next) => {
 
 export const deletePet = async (request, response, next) => {
   try {
+    const hasAdoptionHistory = await AdoptionRequest.exists({ pet: request.params.id });
+    if (hasAdoptionHistory) {
+      return response.status(409).json({
+        message: 'This pet has adoption history and cannot be deleted. Update its status or keep the record for audit history.',
+      });
+    }
+
     const pet = await Pet.findByIdAndDelete(request.params.id);
     if (!pet) return response.status(404).json({ message: 'Pet not found.' });
     return response.status(204).send();
