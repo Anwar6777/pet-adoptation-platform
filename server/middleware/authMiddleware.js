@@ -8,19 +8,27 @@ export const protect = async (request, response, next) => {
     return response.status(401).json({ message: 'Authentication is required.' });
   }
 
+  let decoded;
   try {
-    const token = authorization.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
+    const token = authorization.slice('Bearer '.length).trim();
+    if (!token) {
+      return response.status(401).json({ message: 'Authentication is required.' });
+    }
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (_error) {
+    return response.status(401).json({ message: 'Your session is invalid or has expired. Please log in again.' });
+  }
 
+  try {
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return response.status(401).json({ message: 'The account linked to this token no longer exists.' });
     }
 
     request.user = user;
     return next();
-  } catch (_error) {
-    return response.status(401).json({ message: 'Your session is invalid or has expired. Please log in again.' });
+  } catch (error) {
+    return next(error);
   }
 };
 
