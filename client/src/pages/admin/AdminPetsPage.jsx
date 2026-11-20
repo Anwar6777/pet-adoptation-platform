@@ -1,4 +1,5 @@
 import { PawPrint, Pencil, Plus, Trash2, X } from 'lucide-react';
+import PetImage from '../../components/common/PetImage';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -233,7 +234,7 @@ function AdminPetsPage() {
                   {pets.map((pet) => (
                     <tr key={pet._id}>
                       <td className="flex items-center gap-3 px-6 py-4">
-                        <img src={pet.image} alt={pet.name} className="h-10 w-10 rounded-lg object-cover" />
+                        <PetImage src={pet.image} alt={pet.name} className="h-10 w-10 rounded-lg object-cover" />
                         <span className="font-extrabold text-charcoal">{pet.name}</span>
                       </td>
                       <td className="px-6 py-4 text-slate-600">
