@@ -4,6 +4,8 @@ import mongoose from 'mongoose';
 import connectDatabase from './config/db.js';
 import Pet from './models/Pet.js';
 import User from './models/User.js';
+import dns from 'node:dns';
+dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 dotenv.config();
 
