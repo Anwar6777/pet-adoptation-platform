@@ -8,6 +8,8 @@ import adminRoutes from './routes/adminRoutes.js';
 import petRoutes from './routes/petRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
+import dns from 'node:dns';
+dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 dotenv.config();
 
